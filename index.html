@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dino Game</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #f8fafb;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .game-wrapper {
+      width: 100%;
+      max-width: 820px;
+      padding: 0 16px;
+    }
+    canvas {
+      width: 100%;
+      display: block;
+      border-bottom: 2px solid #d3d1c7;
+      cursor: pointer;
+    }
+    .hint {
+      text-align: center;
+      padding: 12px 0;
+      font-size: 13px;
+      color: #888780;
+    }
+    kbd {
+      border: 0.5px solid #b4b2a9;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-wrapper">
+    <canvas id="c" width="800" height="300"></canvas>
+    <p class="hint">Press <kbd>Space</kbd> or tap to start &nbsp;|&nbsp; Double-jump available</p>
+  </div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 800, H = 300, GROUND = 228;
+const BASE_SPEED = 5, MAX_SPEED = 18;
+const FRAME_COUNT = 6, SPRITE_W = 292, SPRITE_H = 40;
+const FRAME_W = SPRITE_W / FRAME_COUNT;
+const DINO_W = 58, DINO_H = 52;
+const BIRD_COLOR = '#534ab7';
+
+let dino, obstacles, clouds, score, hiScore, speed, frame, state, animT, dustP;
+let nextCactus = 0, nextBird = 0;
+
+// ── Dino sprite sheet ──────────────────────────────────────────────
+const dinoSVG = `<svg width="292" height="40" viewBox="0 0 292 40" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.6077 20.1683L17.6302 15.9933C17.8417 15.13 18.9308 14.8519 19.5302 15.5082L21.6225 17.7989C21.7535 17.9423 21.9198 18.0488 22.1048 18.108L26.8953 19.6387C27.5213 19.8388 27.8379 20.5353 27.5771 21.1384L25.8741 25.0769C25.6091 25.6896 24.8676 25.9321 24.2918 25.5944L17.1249 21.3912C16.7011 21.1427 16.4908 20.6454 16.6077 20.1683Z" fill="#BD0C3F"/><circle cx="19.8649" cy="11.669" r="6.66793" fill="#C51B4C" fill-opacity="0.99"/><path d="M17.7797 24.4944C17.963 24.4649 18.1508 24.4818 18.3259 24.5436L21.8167 25.7756C22.3622 25.9681 22.6688 26.547 22.5216 27.1064L21.594 30.6312C21.4737 31.0886 21.077 31.4197 20.6055 31.4564L10.3667 32.2527C9.62844 32.3101 9.04157 31.643 9.1926 30.9181L10.1237 26.4488C10.2177 25.9976 10.5804 25.6513 11.0353 25.5782L17.7797 24.4944Z" fill="#BD0C3F"/><path d="M17.1181 12.0767C17.2754 11.5505 17.7936 11.2181 18.3375 11.2946L22.9515 11.943C23.5365 12.0252 23.9549 12.5507 23.904 13.1392L22.87 25.1053C22.8203 25.6798 22.3395 26.1209 21.7628 26.1209L14.4114 26.1209C13.6674 26.1209 13.1335 25.4041 13.3467 24.6913L17.1181 12.0767Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M13.0313 25.1255C13.2044 24.5832 13.7593 24.2595 14.3166 24.3756L18.9968 25.3506C19.5651 25.469 19.9465 26.0049 19.8723 26.5807L19.0176 33.2092C18.9461 33.7634 18.4742 34.1784 17.9154 34.1784L11.6623 34.1784C10.9097 34.1784 10.3747 33.446 10.6036 32.7291L13.0313 25.1255Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M11.7242 20.0698L15.921 18.1054C16.6579 17.7605 17.5034 18.2983 17.5034 19.1119V20.0006C17.5034 20.2714 17.4046 20.5329 17.2254 20.7359L15.9539 22.1769C15.6354 22.5379 15.5855 23.063 15.8305 23.4775L18.2931 27.6451C18.6653 28.275 18.3378 29.0865 17.6326 29.2816L13.7133 30.3656C13.0699 30.5436 12.4159 30.1182 12.3178 29.4579L11.0961 21.2397C11.0239 20.7538 11.2793 20.2781 11.7242 20.0698Z" fill="#C72957"/><circle cx="22.667" cy="12.667" r="1.66698" fill="white"/><path d="M65.2615 17.0232L69.1166 15.122C69.9137 14.7289 70.827 15.3842 70.7097 16.2653L70.3006 19.3405C70.2749 19.5331 70.3002 19.729 70.3739 19.9087L72.2816 24.562C72.5309 25.17 72.201 25.8604 71.5714 26.0484L67.4599 27.2763C66.8203 27.4674 66.1578 27.0554 66.0462 26.3972L64.6574 18.2056C64.5753 17.7213 64.8209 17.2405 65.2615 17.0232Z" fill="#BD0C3F"/><circle cx="72.3749" cy="10.8356" r="6.66793" fill="#C51B4C" fill-opacity="0.99"/><path d="M71.0863 28.3399C71.5927 28.1778 71.9133 27.6797 71.8512 27.1517L71.616 25.1525C71.5187 24.3251 72.3326 23.6888 73.1121 23.9829L77.856 25.773C78.3766 25.9695 78.6716 26.5206 78.5465 27.0627L77.615 31.0993C77.5507 31.3782 77.3812 31.6215 77.1419 31.7785L73.8814 33.9181C73.4164 34.2233 72.7974 34.1376 72.4327 33.7177L69.5909 30.4455C69.0676 29.843 69.3312 28.9017 70.0912 28.6584L71.0863 28.3399Z" fill="#BD0C3F"/><path d="M69.628 12.0773C69.7853 11.5511 70.3035 11.2187 70.8474 11.2951L75.4614 11.9436C76.0464 12.0258 76.4648 12.5513 76.4139 13.1398L75.3799 25.1058C75.3302 25.6804 74.8493 26.1215 74.2727 26.1215L66.9213 26.1215C66.1773 26.1215 65.6434 25.4046 65.8566 24.6918L69.628 12.0773Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M65.4211 24.7278C65.6806 24.3879 66.1123 24.227 66.531 24.3143L70.9487 25.2346C71.707 25.3926 72.0752 26.2583 71.6629 26.914L67.4229 33.6588C67.2195 33.9823 66.8642 34.1787 66.4821 34.1787L60.4522 34.1787C59.532 34.1787 59.0105 33.1243 59.5689 32.3929L65.4211 24.7278Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M68.8631 22.9597L70.3826 18.5822C70.6494 17.8135 71.6245 17.5827 72.2076 18.1502L72.8444 18.7701C73.0385 18.9589 73.1569 19.2121 73.1774 19.4821L73.3232 21.3984C73.3597 21.8785 73.7013 22.2804 74.1691 22.394L78.8733 23.5361C79.5843 23.7087 79.9374 24.5094 79.5853 25.1508L77.6285 28.7155C77.3072 29.3007 76.5463 29.4726 76.0046 29.0824L69.2634 24.2258C68.8648 23.9386 68.7021 23.4238 68.8631 22.9597Z" fill="#C72957"/><circle cx="75.8478" cy="11.6691" r="1.66698" fill="white"/><path d="M115.546 16.4453L119.536 16.9657C120.403 17.0788 120.806 18.1026 120.248 18.7762L118.531 20.8517C118.319 21.1068 118.006 21.2545 117.674 21.2545L115.672 21.2545C115.336 21.2545 115.018 21.4063 114.808 21.6675L112.914 24.0122C112.531 24.4856 111.839 24.5634 111.361 24.1868L108.859 22.2154C108.261 21.7441 108.304 20.8242 108.943 20.4099L114.798 16.6147C115.02 16.4713 115.285 16.4112 115.546 16.4453Z" fill="#BD0C3F"/><circle cx="123.754" cy="10.2796" r="6.66793" fill="#C51B4C" fill-opacity="0.99"/><path d="M124.965 29.2297C124.868 28.9318 124.649 28.6889 124.363 28.5609L122.139 27.566C121.379 27.2257 121.249 26.2007 121.901 25.6819L125.869 22.5247C126.304 22.1782 126.928 22.2071 127.33 22.5922L130.465 25.5999C130.581 25.7111 130.672 25.8462 130.731 25.9959L133.016 31.8183C133.272 32.4709 132.867 33.1946 132.177 33.3182L127.58 34.1419C127.035 34.2397 126.501 33.9205 126.328 33.3937L124.965 29.2297Z" fill="#BD0C3F"/><path d="M121.007 11.7995C121.164 11.2733 121.683 10.9409 122.226 11.0174L126.84 11.6658C127.425 11.748 127.844 12.2735 127.793 12.862L126.759 24.8281C126.709 25.4026 126.228 25.8437 125.652 25.8437L118.3 25.8437C117.556 25.8437 117.022 25.1269 117.236 24.4141L121.007 11.7995Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M117.108 24.4649C117.186 24.4547 117.264 24.4527 117.342 24.4589L123.151 24.9227C124.309 25.0152 124.566 26.5989 123.497 27.0533L115.121 30.612C114.786 30.7546 114.401 30.7235 114.093 30.5288L109.265 27.4793C108.386 26.9241 108.683 25.5735 109.713 25.4379L117.108 24.4649Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M124.731 23.1721L123.372 18.7422C123.133 17.9643 123.784 17.2022 124.59 17.3158L125.47 17.4399C125.738 17.4777 125.983 17.6121 126.159 17.8178L127.408 19.2781C127.721 19.6439 128.234 19.7666 128.679 19.582L133.15 17.7254C133.825 17.4448 134.583 17.8825 134.678 18.608L135.204 22.6403C135.29 23.3023 134.778 23.8904 134.11 23.8954L125.802 23.9574C125.311 23.9611 124.875 23.6418 124.731 23.1721Z" fill="#C72957"/><circle cx="127.246" cy="10.5575" r="1.66698" fill="white"/><path d="M169.293 18.8848L172.685 16.7208C173.422 16.2506 174.388 16.7764 174.394 17.6508L174.411 20.3448C174.413 20.6759 174.267 20.9907 174.013 21.2034L172.479 22.4897C172.221 22.7054 172.075 23.0259 172.082 23.3616L172.136 26.375C172.147 26.9834 171.667 27.4876 171.059 27.506L167.875 27.6025C167.114 27.6255 166.555 26.8933 166.779 26.1652L168.829 19.4952C168.906 19.243 169.071 19.0267 169.293 18.8848Z" fill="#BD0C3F"/><circle cx="176.447" cy="11.3912" r="6.66793" fill="#C51B4C" fill-opacity="0.99"/><path d="M176.733 30.2325C177.106 29.672 176.899 28.9105 176.293 28.6163L174.752 27.8682C174.016 27.511 173.905 26.5081 174.545 25.9988L178.562 22.8025C178.997 22.4561 179.622 22.485 180.023 22.8701L182.88 25.6102C183.162 25.8809 183.281 26.2799 183.194 26.661L181.666 33.3109C181.55 33.8157 181.101 34.1735 180.583 34.1735L176.182 34.1735C175.294 34.1735 174.765 33.1843 175.257 32.4457L176.733 30.2325Z" fill="#BD0C3F"/><path d="M173.7 12.0768C173.858 11.5505 174.376 11.2181 174.92 11.2946L179.534 11.943C180.119 12.0253 180.537 12.5507 180.486 13.1392L179.452 25.1053C179.403 25.6798 178.922 26.1209 178.345 26.1209L170.994 26.1209C170.25 26.1209 169.716 25.4041 169.929 24.6913L173.7 12.0768Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M168.934 26.241C169.3 26.1632 169.603 25.9059 169.739 25.5567L170.195 24.3835C170.372 23.9276 170.827 23.6412 171.315 23.6782L177.86 24.1739C178.686 24.2365 179.155 25.1482 178.727 25.8571L176.298 29.8739C176.14 30.1355 175.881 30.3204 175.582 30.3851L166.924 32.2571C166.299 32.3924 165.688 31.9725 165.591 31.3398L165.097 28.127C165.007 27.5444 165.388 26.9932 165.964 26.8709L168.934 26.241Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M173.646 23.2668L174.668 18.7473C174.847 17.9537 175.791 17.6156 176.433 18.1146L177.135 18.6596C177.349 18.8257 177.495 19.0641 177.546 19.3301L177.904 21.2182C177.994 21.6912 178.378 22.0526 178.856 22.1134L183.658 22.7241C184.384 22.8164 184.824 23.5728 184.545 24.2494L182.998 28.01C182.744 28.6273 182.007 28.883 181.425 28.5556L174.185 24.4805C173.757 24.2395 173.537 23.746 173.646 23.2668Z" fill="#C72957"/><circle cx="180.034" cy="11.6686" r="1.66698" fill="white"/><path d="M224.024 21.3388L222.386 17.6642C222.03 16.8656 222.693 15.9876 223.558 16.1116L226.225 16.4936C226.553 16.5405 226.843 16.7312 227.016 17.0137L228.061 18.7217C228.236 19.0081 228.531 19.2 228.864 19.2436L231.852 19.6354C232.456 19.7144 232.883 20.2641 232.812 20.8684L232.436 24.0315C232.346 24.7878 231.539 25.2317 230.852 24.9027L224.559 21.8886C224.321 21.7746 224.131 21.5797 224.024 21.3388Z" fill="#BD0C3F"/><circle cx="225.44" cy="10.2796" r="6.66793" fill="#C51B4C" fill-opacity="0.99"/><path d="M221.605 28.3995C222.32 28.1123 222.533 27.2023 222.019 26.6278L221.084 25.5817C220.539 24.9718 220.818 24.002 221.603 23.7739L226.533 22.3426C227.067 22.1875 227.634 22.4514 227.859 22.9602L229.476 26.6154C229.626 26.9536 229.598 27.344 229.401 27.657L226.202 32.7405C225.929 33.1739 225.396 33.3649 224.91 33.2029L219.44 31.3798C218.459 31.0527 218.418 29.6799 219.378 29.2943L221.605 28.3995Z" fill="#BD0C3F"/><path d="M222.693 11.7991C222.85 11.2728 223.368 10.9404 223.912 11.0169L228.526 11.6653C229.111 11.7475 229.529 12.273 229.479 12.8615L228.445 24.8276C228.395 25.4021 227.914 25.8432 227.337 25.8432L219.986 25.8432C219.242 25.8432 218.708 25.1264 218.921 24.4136L222.693 11.7991Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M219.208 27.5147C219.281 27.2245 219.234 26.9172 219.077 26.6623L218.982 26.5081C218.708 26.0637 218.781 25.4889 219.156 25.1263L224.137 20.3159C224.771 19.7045 225.829 20.0367 226 20.9003L226.901 25.4695C226.937 25.6517 226.926 25.8399 226.871 26.0171L224.731 32.8386C224.586 33.302 224.156 33.6174 223.671 33.6174L219.104 33.6173C218.381 33.6173 217.85 32.9376 218.026 32.2361L219.208 27.5147Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M217.337 20.8866L220.443 17.4478C220.988 16.8439 221.976 17.0116 222.292 17.7614L222.637 18.5805C222.742 18.8301 222.752 19.1094 222.666 19.3661L222.053 21.1875C221.899 21.6439 222.057 22.1472 222.444 22.4342L226.331 25.3198C226.918 25.7559 226.931 26.6309 226.357 27.0843L223.165 29.6041C222.641 30.0178 221.873 29.8795 221.527 29.309L217.212 22.2085C216.957 21.7887 217.008 21.2512 217.337 20.8866Z" fill="#C72957"/><circle cx="228.932" cy="10.5575" r="1.66698" fill="white"/><path d="M273.093 23.1721L271.733 18.7422C271.495 17.9643 272.145 17.2022 272.951 17.3158L274.009 17.465C274.166 17.4871 274.316 17.5425 274.45 17.6274L276.019 18.6246C276.288 18.7951 276.616 18.8425 276.922 18.7549L280.321 17.7803C280.876 17.621 281.461 17.914 281.666 18.4542L283.161 22.3923C283.436 23.1162 282.904 23.8922 282.13 23.898L274.163 23.9574C273.672 23.9611 273.237 23.6418 273.093 23.1721Z" fill="#BD0C3F"/><circle cx="272.115" cy="10.2796" r="6.66793" fill="#C51B4C" fill-opacity="0.99"/><path d="M269.368 11.7991C269.526 11.2728 270.044 10.9404 270.588 11.0169L275.202 11.6653C275.787 11.7475 276.205 12.273 276.154 12.8615L275.12 24.8276C275.07 25.4021 274.59 25.8432 274.013 25.8432L266.662 25.8432C265.918 25.8432 265.384 25.1264 265.597 24.4136L269.368 11.7991Z" fill="#C51B4C" fill-opacity="0.99"/><path d="M265.184 25.0637C265.428 24.691 265.871 24.5 266.309 24.5786L272.365 25.6631C273.323 25.8347 273.613 27.0679 272.832 27.6488L266.723 32.1921C266.455 32.3908 266.113 32.4592 265.79 32.3785L260.149 30.9683C259.556 30.82 259.194 30.2203 259.339 29.6263L260.293 25.7234C260.457 25.0563 261.18 24.6953 261.811 24.9658L263.638 25.7488C264.133 25.9612 264.71 25.7872 265.005 25.3361L265.184 25.0637Z" fill="#BD0C3F"/><path d="M263.895 15.2698L268.339 16.7189C269.085 16.962 269.351 17.8799 268.851 18.484L266.892 20.8511C266.681 21.1062 266.367 21.2539 266.036 21.2539L263.847 21.2539C263.623 21.2539 263.403 21.3219 263.218 21.4489L261.262 22.7915C260.805 23.1048 260.188 23.0343 259.814 22.6261L256.95 19.5015C256.43 18.9343 256.63 18.0232 257.339 17.7257L263.121 15.3015C263.367 15.1983 263.642 15.1871 263.895 15.2698Z" fill="#C72957"/><path d="M273.315 29.1929C273.224 28.9161 273.029 28.6859 272.77 28.5519L268.554 26.3667C267.46 25.7999 267.963 24.1394 269.188 24.2754L274.232 24.8359C274.406 24.8553 274.573 24.9154 274.719 25.0113L278.712 27.6318C278.863 27.7308 278.987 27.8651 279.075 28.0229L281.12 31.7203C281.489 32.3866 281.093 33.2179 280.344 33.3522L275.942 34.1411C275.396 34.2388 274.862 33.9196 274.689 33.3928L273.315 29.1929Z" fill="#C51B4C" fill-opacity="0.99"/><circle cx="275.33" cy="10.8353" r="1.66698" fill="white"/></svg>`;
+const dinoImg = new Image();
+dinoImg.src = URL.createObjectURL(new Blob([dinoSVG], { type: 'image/svg+xml' }));
+
+// ── Cloud SVGs ─────────────────────────────────────────────────────
+function svgToImg(s) {
+  const i = new Image();
+  i.src = URL.createObjectURL(new Blob([s], { type: 'image/svg+xml' }));
+  return i;
+}
+const svg1 = `<svg width="768" height="322" viewBox="0 0 768 322" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#f1)"><path fill-rule="evenodd" clip-rule="evenodd" d="M637 95.5C637 109.986 631.614 123.718 621.975 136.018C622.981 136.006 623.989 136 625 136C701.768 136 764 170.474 764 213C764 255.526 701.768 290 625 290C599.426 290 575.466 286.174 554.881 279.499C527.507 300.453 483.997 314 435 314C412.045 314 390.294 311.026 370.843 305.711C340.473 311.002 305.807 314 269 314C213.279 314 162.463 307.128 124.036 295.834C118.488 296.601 112.798 297 107 297C47.9055 297 0 255.586 0 204.5C0 153.414 47.9055 112 107 112C120.469 112 133.356 114.151 145.228 118.078C149.138 84.5584 202.834 58 268.5 58C289.302 58 308.902 60.6651 326.099 65.3724C347.171 27.3921 406.993 0 477.5 0C565.589 0 637 42.7568 637 95.5Z" fill="url(#g1)"/></g><defs><filter id="f1" x="-4" y="0" width="772" height="322" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="4"/><feGaussianBlur stdDeviation="2"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="e1"/><feBlend mode="normal" in="SourceGraphic" in2="e1" result="shape"/></filter><linearGradient id="g1" x1="382" y1="0" x2="382" y2="314" gradientUnits="userSpaceOnUse"><stop stop-color="#D9EFF5"/><stop offset="0.854167" stop-color="#F8FAFB"/></linearGradient></defs></svg>`;
+const svg2 = `<svg width="449" height="264" viewBox="0 0 449 264" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#f2)"><path fill-rule="evenodd" clip-rule="evenodd" d="M200.295 0C249.338 0 291.193 32.3077 307.606 77.7571C309.624 77.6945 311.654 77.6629 313.695 77.6629C386.213 77.6629 445 117.585 445 166.831C445 216.078 386.213 256 313.695 256C293.498 256 274.365 252.903 257.272 247.371H174.572C157.914 252.862 138.624 256 118.063 256C55.0678 256 4 226.541 4 190.202C4 160.34 38.4869 135.124 85.7395 127.084C85.6259 124.888 85.5684 122.676 85.5684 120.449C85.5684 53.9271 136.933 0 200.295 0Z" fill="url(#g2)"/></g><defs><filter id="f2" x="0" y="0" width="449" height="264" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="4"/><feGaussianBlur stdDeviation="2"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="e1"/><feBlend mode="normal" in="SourceGraphic" in2="e1" result="shape"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="4"/><feGaussianBlur stdDeviation="2"/><feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/><feBlend mode="normal" in2="shape" result="e2"/></filter><linearGradient id="g2" x1="224.5" y1="0" x2="224.5" y2="256" gradientUnits="userSpaceOnUse"><stop stop-color="#D9EFF5"/><stop offset="1" stop-color="white"/></linearGradient></defs></svg>`;
+const cloudImgs = [svgToImg(svg1), svgToImg(svg2)];
+
+// ── Bird heights ───────────────────────────────────────────────────
+const BIRD_HEIGHTS = {
+  mid:   () => GROUND - 22,
+  low:   () => GROUND + 14,
+  high:  () => GROUND - 70,
+  diver: () => GROUND - 85
+};
+
+// ── Game init ──────────────────────────────────────────────────────
+function init() {
+  dino = { x: 80, y: GROUND, w: DINO_W, h: DINO_H, vy: 0, jumping: false, jumps: 0, dead: false };
+  obstacles = []; clouds = []; dustP = [];
+  score = 0; speed = BASE_SPEED; frame = 0; animT = 0; state = 'idle';
+  hiScore = hiScore || 0;
+  nextCactus = 90; nextBird = 150;
+}
+
+function jump() {
+  if (state === 'idle' || state === 'over') { init(); state = 'run'; return; }
+  if (dino.jumps < 2) {
+    dino.vy = -14; dino.jumping = true; dino.jumps++;
+    for (let i = 0; i < 6; i++)
+      dustP.push({ x: dino.x + 10, y: GROUND + dino.h, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 2, life: 1 });
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); jump(); } });
+canvas.addEventListener('click', jump);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); jump(); });
+
+// ── Spawners ───────────────────────────────────────────────────────
+function spawnBirds() {
+  const pool = ['mid'];
+  if (score > 100) pool.push('low');
+  if (score > 250) pool.push('high');
+  if (score > 400) pool.push('diver');
+  const bType = pool[Math.floor(Math.random() * pool.length)];
+  let count = 1;
+  if (score > 300 && Math.random() < 0.35) count = 2;
+  if (score > 500 && Math.random() < 0.25) count = 3;
+  const sm = 1.1 + Math.random() * 0.3 + (score > 400 ? 0.1 : 0);
+  for (let i = 0; i < count; i++) {
+    obstacles.push({
+      x: W + 20 + i * 58,
+      y: BIRD_HEIGHTS[bType]() + (i > 0 ? (Math.random() - 0.5) * 18 : 0),
+      w: 36, h: 24, type: 'bird', birdType: bType,
+      speedMult: sm, vy: 0, diving: false, targetY: GROUND + 10, trail: []
+    });
+  }
+}
+
+function spawnCactus() {
+  const types = [{ w: 20, h: 40 }, { w: 16, h: 55 }, { w: 36, h: 40 }, { w: 20, h: 70 }];
+  const t = types[Math.floor(Math.random() * types.length)];
+  obstacles.push({ x: W + 20, y: GROUND + (DINO_H - t.h), w: t.w, h: t.h, type: 'cactus' });
+}
+
+function spawnCloud() {
+  const idx = Math.floor(Math.random() * 2);
+  const scale = idx === 0 ? (0.10 + Math.random() * 0.05) : (0.15 + Math.random() * 0.07);
+  clouds.push({ x: W + 60, y: 15 + Math.random() * 75, w: (idx === 0 ? 768 : 449) * scale, h: (idx === 0 ? 322 : 264) * scale, img: cloudImgs[idx], spd: 0.7 + Math.random() * 0.5 });
+}
+
+// ── Update ─────────────────────────────────────────────────────────
+function updateBird(o) {
+  o.x -= speed * o.speedMult;
+  if (o.birdType === 'diver' && !o.diving && o.x < W * 0.55) o.diving = true;
+  if (o.diving) {
+    o.vy += 1.0; o.y += o.vy;
+    if (o.y >= o.targetY) { o.y = o.targetY; o.vy = 0; o.diving = false; }
+  }
+  if (o.birdType === 'diver') {
+    o.trail.unshift({ x: o.x + o.w / 2, y: o.y + o.h / 2 });
+    if (o.trail.length > 8) o.trail.pop();
+  }
+}
+
+// ── Draw ───────────────────────────────────────────────────────────
+function drawBird(o) {
+  if (o.trail && o.trail.length > 1) {
+    for (let i = 1; i < o.trail.length; i++) {
+      ctx.globalAlpha = (1 - i / o.trail.length) * 0.25;
+      ctx.fillStyle = BIRD_COLOR;
+      ctx.fillRect(o.trail[i].x - 3, o.trail[i].y - 3, 6, 6);
+    }
+    ctx.globalAlpha = 1;
+  }
+  const wing = Math.floor(frame / 5) % 2;
+  ctx.fillStyle = BIRD_COLOR;
+  ctx.fillRect(o.x, o.y + 8, o.w, 10);
+  ctx.fillRect(o.x + o.w - 6, o.y + 11, 6, 5);
+  if (wing) ctx.fillRect(o.x + 4, o.y, 20, 9);
+  else      ctx.fillRect(o.x + 4, o.y + 18, 20, 9);
+  ctx.fillStyle = 'white';
+  ctx.fillRect(o.x + o.w - 14, o.y + 9, 4, 4);
+}
+
+function drawCactus(o) {
+  ctx.fillStyle = '#3b6d11';
+  ctx.fillRect(o.x + 6, o.y, 8, o.h);
+  ctx.fillRect(o.x, o.y + 12, o.w, 6);
+  ctx.fillRect(o.x, o.y + 6, 6, 16);
+  ctx.fillRect(o.x + 14, o.y + 8, 6, 14);
+}
+
+function drawDino() {
+  if (!dinoImg.complete) return;
+  const d = dino;
+  const fi = d.dead ? 5 : d.jumping ? 2 : Math.floor(animT / 7) % FRAME_COUNT;
+  if (d.dead) {
+    ctx.save();
+    ctx.drawImage(dinoImg, fi * FRAME_W, 0, FRAME_W, SPRITE_H, d.x, d.y, DINO_W, DINO_H);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(220,80,80,0.45)';
+    ctx.fillRect(d.x, d.y, DINO_W, DINO_H);
+    ctx.restore();
+  } else {
+    ctx.drawImage(dinoImg, fi * FRAME_W, 0, FRAME_W, SPRITE_H, d.x, d.y, DINO_W, DINO_H);
+  }
+}
+
+function collides(a, b) {
+  const p = 5;
+  return a.x + p < b.x + b.w - p && a.x + a.w - p > b.x + p && a.y + p < b.y + b.h - p && a.y + a.h - p > b.y + p;
+}
+
+// ── Main loop ──────────────────────────────────────────────────────
+function loop() {
+  ctx.clearRect(0, 0, W, H);
+
+  // ground
+  ctx.strokeStyle = '#d3d1c7'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, GROUND + DINO_H + 11); ctx.lineTo(W, GROUND + DINO_H + 11); ctx.stroke();
+  ctx.fillStyle = '#b4b2a9';
+  for (let i = 0; i < 14; i++) {
+    const gx = ((i * 70) - (frame * speed * 0.5) % 70 + 70) % W;
+    ctx.fillRect(gx, GROUND + DINO_H + 14, 4, 2);
+  }
+
+  if (state === 'run') {
+    frame++; animT++;
+    score += 0.1;
+    if (score > hiScore) hiScore = score;
+    speed = BASE_SPEED + (MAX_SPEED - BASE_SPEED) * (1 - Math.exp(-score / 800));
+
+    dino.vy += 0.7; dino.y += dino.vy;
+    if (dino.y >= GROUND) { dino.y = GROUND; dino.vy = 0; dino.jumping = false; dino.jumps = 0; }
+
+    nextCactus--; nextBird--;
+    if (nextCactus <= 0) { spawnCactus(); nextCactus = Math.floor(Math.max(50, 95 - speed * 3) + Math.random() * 30); }
+    if (nextBird <= 0)   { spawnBirds(); nextBird   = Math.floor(Math.max(70, 140 - speed * 4) + Math.random() * 60); }
+
+    obstacles.forEach(o => o.type === 'bird' ? updateBird(o) : o.x -= speed);
+    obstacles = obstacles.filter(o => o.x > -120);
+
+    if (frame % 90 === 0) spawnCloud();
+    clouds.forEach(cl => cl.x -= cl.spd);
+    clouds = clouds.filter(cl => cl.x > -300);
+
+    dustP.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= 0.05; });
+    dustP = dustP.filter(p => p.life > 0);
+
+    for (const o of obstacles) {
+      if (collides(dino, o)) { state = 'over'; dino.dead = true; break; }
+    }
+  }
+
+  // clouds at 40% opacity
+  ctx.globalAlpha = 0.4;
+  clouds.forEach(cl => { if (cl.img.complete) ctx.drawImage(cl.img, cl.x, cl.y, cl.w, cl.h); });
+  ctx.globalAlpha = 1;
+
+  dustP.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = '#b4b2a9'; ctx.fillRect(p.x, p.y, 4, 4); ctx.globalAlpha = 1; });
+  obstacles.forEach(o => o.type === 'bird' ? drawBird(o) : drawCactus(o));
+  drawDino();
+
+  // HUD
+  ctx.fillStyle = '#888780'; ctx.font = '12px monospace';
+  ctx.fillText('SPD ' + speed.toFixed(1), W - 260, 26);
+  ctx.fillText('HI ' + String(Math.floor(hiScore)).padStart(5, '0'), W - 170, 26);
+  ctx.fillStyle = '#2c2c2a';
+  ctx.fillText(String(Math.floor(score)).padStart(5, '0'), W - 80, 26);
+
+  if (state === 'idle') {
+    ctx.fillStyle = '#888780'; ctx.font = '500 18px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('Press Space or tap to play', W / 2, H / 2 - 20); ctx.textAlign = 'left';
+  }
+  if (state === 'over') {
+    ctx.fillStyle = '#2c2c2a'; ctx.font = '500 20px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('Game over', W / 2, H / 2 - 30);
+    ctx.fillStyle = '#888780'; ctx.font = '14px sans-serif';
+    ctx.fillText('Press Space or tap to restart', W / 2, H / 2 + 2); ctx.textAlign = 'left';
+  }
+
+  requestAnimationFrame(loop);
+}
+
+init(); loop();
+</script>
+</body>
+</html>
